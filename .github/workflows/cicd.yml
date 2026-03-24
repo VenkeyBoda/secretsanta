@@ -1,0 +1,92 @@
+name: Docker Image Build and Push
+
+on:
+    push:
+      branches:
+        - feature_develop
+        - main
+  
+    pull_request:
+      branches:
+        - main
+
+jobs:
+
+    changes:
+        runs-on: ubuntu-latest
+        outputs:
+            run_ci: ${{ steps.filter.outputs.ci }}
+          
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+        
+            - name: Filter changes
+              id: filter
+              uses: dorny/paths-filter@v3
+              with:
+                filters: |
+                  ci:
+                    - 'src/**'
+                    - 'Dockerfile'
+
+    build-push-scan:
+        needs: changes
+        if: needs.changes.outputs.run_ci == 'true'
+        runs-on: ubuntu-latest
+
+        env:
+            DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+            DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+        steps:
+
+            - name: Checkout source code
+              uses: actions/checkout@v4
+
+            - name: Login to DockerHub
+              run: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+            - name: Build Docker image
+              run: docker build -t $DOCKER_USERNAME/santa:latest .
+
+            - name: Push Docker image
+              run: docker push $DOCKER_USERNAME/santa:latest
+
+            - name: Install Trivy
+              run: |
+                    wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.69.3_Linux-64bit.deb
+                    sudo dpkg -i trivy_0.69.3_Linux-64bit.deb
+
+            - name: Trivy scan
+              run: trivy image -f table -o trivy-report.txt $DOCKER_USERNAME/santa:latest
+                
+            - name: Upload report
+              uses: actions/upload-artifact@v4
+              with:
+                    name: trivy-report
+                    path: trivy-report.txt
+
+    send-email-alerts:
+
+        needs: [changes,build-push-scan]
+        if: always()
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Send email notification
+              if: always()
+              uses: dawidd6/action-send-mail@v3
+              with:
+                server_address: smtp.gmail.com
+                server_port: 465
+                username: ${{ secrets.EMAIL_USERNAME }}
+                password: ${{ secrets.EMAIL_PASSWORD }}
+                subject: CI Pipeline Status
+                to: venkeyboda02@gmail.com,venkeyboda17@gmail.com,prachivpatil96@gmail.com
+                from: ${{ secrets.EMAIL_USERNAME }}
+                body: |
+                    Pipeline Status: ${{ job.status }}
+                    Repository: ${{ github.repository }}
+                    Branch: ${{ github.ref }}
+                    Commit: ${{ github.sha }}                    
