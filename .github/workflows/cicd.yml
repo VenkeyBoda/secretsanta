@@ -12,31 +12,57 @@ on:
 
 jobs:
 
-  build-and-push:
-    runs-on: ubuntu-latest
+    changes:
+        runs-on: ubuntu-latest
+        outputs:
+            run_ci: ${{ steps.filter.outputs.ci }}
+          
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+        
+            - name: Filter changes
+              id: filter
+              uses: dorny/paths-filter@v3
+              with:
+                filters: |
+                  ci:
+                    - 'src/**'
+                    - 'Dockerfile'
 
-    env:
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+    build-push-scan:
+        needs: changes
+        if: needs.changes.outputs.run_ci == 'true'
+        runs-on: ubuntu-latest
 
-    steps:
+        env:
+            DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+            DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Checkout source code
-        uses: actions/checkout@v4
+        steps:
 
-      - name: Login to DockerHub
-        run: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+            - name: Checkout source code
+              uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: docker build -t $DOCKER_USERNAME/santa:latest .
+            - name: Login to DockerHub
+              run: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
 
-      - name: Push Docker image
-        run: docker push $DOCKER_USERNAME/santa:latest
+            - name: Build Docker image
+              run: docker build -t $DOCKER_USERNAME/santa:latest .
 
-      - name: Install Trivy
-        run: |
-            wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.69.3_Linux-64bit.deb
-            sudo dpkg -i trivy_0.69.3_Linux-64bit.deb
+            - name: Push Docker image
+              run: docker push $DOCKER_USERNAME/santa:latest
 
-      - name: Trivy scan
-        run: trivy image $DOCKER_USERNAME/santa:latest
+            - name: Install Trivy
+              run: |
+                    wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.69.3_Linux-64bit.deb
+                    sudo dpkg -i trivy_0.69.3_Linux-64bit.deb
+
+            - name: Trivy scan
+              run: trivy image -f table -o trivy-report.txt $DOCKER_USERNAME/santa:latest
+                
+            - name: Upload report
+              uses: actions/upload-artifact@v4
+              with:
+                    name: trivy-report
+                    path: trivy-report.txt
