@@ -66,3 +66,27 @@ jobs:
               with:
                     name: trivy-report
                     path: trivy-report.txt
+
+    send-email-alerts:
+
+        needs: [changes,build-push-scan]
+        if: always()
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Send email notification
+              if: always()
+              uses: dawidd6/action-send-mail@v3
+              with:
+                server_address: smtp.gmail.com
+                server_port: 465
+                username: ${{ secrets.EMAIL_USERNAME }}
+                password: ${{ secrets.EMAIL_PASSWORD }}
+                subject: CI Pipeline Status
+                to: venkeyboda02@gmail.com,venkeyboda17@gmail.com,prachivpatil96@gmail.com
+                from: ${{ secrets.EMAIL_USERNAME }}
+                body: |
+                    Pipeline Status: ${{ job.status }}
+                    Repository: ${{ github.repository }}
+                    Branch: ${{ github.ref }}
+                    Commit: ${{ github.sha }}                    
