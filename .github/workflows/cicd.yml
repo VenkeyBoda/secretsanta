@@ -1,1 +1,37 @@
+name: Docker Image Build and Push
 
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    env:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+    steps:
+
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Login to DockerHub
+        run: echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+      - name: Build Docker image
+        run: docker build -t $DOCKER_USERNAME/santa:latest .
+
+      - name: Push Docker image
+        run: docker push $DOCKER_USERNAME/santa:latest
+
+      - name: Install Trivy
+        run: |
+            chmod +x scripts/install_trivy.sh
+            ./scripts/install_trivy.sh
+
+      - name: Trivy scan
+        run: trivy image $DOCKER_USERNAME/santa:latest
