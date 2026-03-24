@@ -35,8 +35,8 @@ jobs:
 
       - name: Install Trivy
         run: |
-            chmod +x scripts/install_trivy.sh
-            ./scripts/install_trivy.sh
+            wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.69.3_Linux-64bit.deb
+            sudo dpkg -i trivy_0.69.3_Linux-64bit.deb
 
       - name: Trivy scan
         run: trivy image $DOCKER_USERNAME/santa:latest
